@@ -1,18 +1,5 @@
 import urllib.request
 import os
-
-# 인터넷에서 무료 나눔고딕 폰트를 Streamlit 서버 안으로 다운로드 (보안 프로그램 안 걸림!)
-if not os.path.exists("NanumGothic.ttf"):
-    urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf", "NanumGothic.ttf")
-if not os.path.exists("NanumGothic-Bold.ttf"):
-    urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf", "NanumGothic-Bold.ttf")
-
-# 그다음 경로 설정 부문은 원래대로 아래처럼 놔두시면 됩니다!
-BASE_PATH = os.path.dirname(os.path.abspath(__file__))
-JSON_KEY_FILE = os.path.join(BASE_PATH, "key.json")
-LOGO_IMAGE_PATH = os.path.join(BASE_PATH, "logo.png")
-FONT_PATH = "NanumGothic.ttf"
-FONT_BOLD_PATH = "NanumGothic-Bold.ttf"
 import streamlit as st
 import pandas as pd
 import gspread
@@ -20,7 +7,6 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import io
-import os
 import traceback
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -29,19 +15,34 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 
-# --- 1. 경로 및 설정 ---
+# ==========================================
+# --- 1. 경로 및 폰트 자동 다운로드 설정 ---
+# ==========================================
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 JSON_KEY_FILE = os.path.join(BASE_PATH, "key.json")
 LOGO_IMAGE_PATH = os.path.join(BASE_PATH, "logo.png")
 
-# 🌟 파일 업로드 없이 리눅스 서버에 내장된 한글 폰트를 직접 지정합니다.
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf" 
-FONT_BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_PATH = "NanumGothic.ttf"
+FONT_BOLD_PATH = "NanumGothic-Bold.ttf"
 
+# 사내 보안 프로그램을 우회하여 인터넷에서 폰트를 자동으로 다운로드합니다.
+if not os.path.exists(FONT_PATH):
+    try:
+        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf", FONT_PATH)
+    except Exception as e:
+        st.error(f"기본 폰트 다운로드 실패: {e}")
+
+if not os.path.exists(FONT_BOLD_PATH):
+    try:
+        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf", FONT_BOLD_PATH)
+    except Exception as e:
+        st.error(f"볼드 폰트 다운로드 실패: {e}")
+
+# 구글 드라이브 및 스프레드시트 설정 값
 SHEET_ID = "1EiaKCUJU9O5ajNzUwVOq542aVc8CTw8oFbLaeI9xeHI"
 FOLDER_ID = "1INlxagsBpkYmm4rGM2CqB2wtM_oa6EAW"
 
-# [디벨롭 1번] 카테고리별 영문 타이틀 매핑 사전 업데이트
+# 카테고리별 영문 타이틀 매핑 사전
 CATEGORY_ENG_MAP = {
     "디저트": "Sweet Dessert",
     "조미식품": "Sauce & Seasoning",
@@ -49,11 +50,13 @@ CATEGORY_ENG_MAP = {
     "축산물": "Premium Meat",
     "가공식품": "Processed Food",
     "비식품": "Non-Food Items",
-    "음료": "Beverage",            # 추가
-    "CK": "Central Kitchen"       # 추가 (구글 시트 카테고리명 표기에 맞춰 대소문자 확인 필요)
+    "음료": "Beverage",
+    "CK": "Central Kitchen"
 }
 
+# ==========================================
 # --- 2. 인증 및 서비스 연결 (캐싱 적용) ---
+# ==========================================
 @st.cache_resource
 def get_gspread_client():
     try:
@@ -64,7 +67,9 @@ def get_gspread_client():
         st.error(f"인증 파일 로드 실패: {e}")
         return None, None
 
+# ==========================================
 # --- 3. 데이터 기능 함수 ---
+# ==========================================
 def load_data(gc):
     sh = gc.open_by_key(SHEET_ID)
     worksheet = sh.worksheet("list")
@@ -89,7 +94,9 @@ def download_image(drive_service, file_id):
     fh.seek(0)
     return fh
 
+# ==========================================
 # --- 4. PDF 생성 로직 ---
+# ==========================================
 def create_pdf(selected_data, image_map, items_per_page, drive_service):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -102,13 +109,12 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
     PAGE_INNER_W = width - (MARGIN_LEFT * 2)
     PAGE_INNER_H = height - MARGIN_TOP - MARGIN_BOTTOM
     
-    # [디벨롭 2번] 레이아웃 구성에 12칸 옵션(가로 3 * 세로 4) 추가
     if items_per_page == 1: cols, rows = 1, 1
     elif items_per_page == 2: cols, rows = 1, 2
     elif items_per_page == 4: cols, rows = 2, 2
     elif items_per_page == 6: cols, rows = 2, 3
     elif items_per_page == 9: cols, rows = 3, 3 
-    elif items_per_page == 12: cols, rows = 3, 4 # 3x4 총 12칸 추가
+    elif items_per_page == 12: cols, rows = 3, 4 
     else: cols, rows = 3, 3 
     
     cell_w = PAGE_INNER_W / cols
@@ -118,22 +124,20 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
     total_items = len(selected_data)
     current_count = 0
 
-    # 카테고리별로 그룹화하여 출력
     for category, group in selected_data.groupby('카테고리', sort=False):
         item_idx = 0
 
-        # 상단 배너 생성 함수
         def draw_page_header(cat_name):
             c.saveState()
             
-            # 1. 고급스러운 베이지톤 배경 박스 (#F7F3E9)
+            # 1. 고급스러운 베이지톤 배경 박스
             banner_h = 135
             banner_y = height - banner_h - 40 
             c.setFillColor(colors.HexColor("#F7F3E9"))
             c.setStrokeColor(colors.transparent)
             c.rect(MARGIN_LEFT, banner_y, PAGE_INNER_W, banner_h, fill=True, stroke=False)
             
-            # 2. 맞춤형 영문 타이틀 (없으면 기본값 사용)
+            # 2. 맞춤형 영문 타이틀
             eng_title = CATEGORY_ENG_MAP.get(cat_name, "Premium Quality")
             c.setFont('KoreanFontBold', 36)
             c.setFillColor(colors.HexColor("#7A8FB7")) 
@@ -149,7 +153,7 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
             c.setStrokeColor(colors.HexColor("#7A8FB7"))
             c.line(MARGIN_LEFT + 25, banner_y + 25, MARGIN_LEFT + 180, banner_y + 25)
             
-            # 5. 배너 안쪽 우측 상단에 회사 로고 배치
+            # 5. 로고 배치
             if os.path.exists(LOGO_IMAGE_PATH):
                 try:
                     logo_img = ImageReader(LOGO_IMAGE_PATH)
@@ -161,16 +165,13 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
             
             c.restoreState()
         
-        # 첫 페이지 배너 그리기
         draw_page_header(category)
         
         for _, row in group.iterrows():
-            # 페이지 전환 로직
             if item_idx > 0 and item_idx % items_per_page == 0:
                 c.showPage()
                 draw_page_header(category) 
             
-            # 그리드 위치 계산
             pos = item_idx % items_per_page
             c_idx = pos % cols
             r_idx = pos // cols
@@ -180,12 +181,11 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
             
             padding = 15
             
-            # [디벨롭 2번 대응] 12칸일 때는 칸이 좁아지므로 이미지와 텍스트 비율 유연하게 조정
             if items_per_page == 12:
-                img_h_limit = cell_h * 0.48  # 이미지 높이 살짝 축소하여 마진 확보
-                title_font_size = 8.5        # 폰트 크기 살짝 축소
-                spec_box_h = 42             # 상세 정보 박스 높이 축소
-                line_spacing = 9            # 줄 간격 좁힘
+                img_h_limit = cell_h * 0.48
+                title_font_size = 8.5 
+                spec_box_h = 42 
+                line_spacing = 9 
             else:
                 img_h_limit = cell_h * 0.55
                 title_font_size = 10
@@ -194,7 +194,6 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
 
             img_y_start = y + (cell_h - img_h_limit) + 6
             
-            # 상품 이미지 렌더링
             if p_code := str(row.get('품목코드', '')):
                 if p_code in image_map:
                     try:
@@ -208,7 +207,6 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
                 else:
                     c.rect(x + padding, img_y_start, cell_w - (padding * 2), img_h_limit - 10)
 
-            # --- 텍스트 및 라인 그리기 영역 ---
             # 1. 품목명
             text_y = y + (cell_h - img_h_limit) - 5
             c.setFont('KoreanFont', title_font_size)
@@ -217,13 +215,13 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
             item_name = str(row.get('품목명', ''))
             c.drawString(x + padding, text_y, item_name)
             
-            # 2. 품목명 아래 라인 긋기
+            # 2. 라인
             line1_y = text_y - 5
             c.setLineWidth(0.5)
             c.setStrokeColor(colors.gray)
             c.line(x + padding, line1_y, x + cell_w - padding, line1_y)
             
-            # 3. 세부 정보 영역 (연한 회색 배경 음영 박스)
+            # 3. 세부 정보 영역
             spec_font_size = title_font_size * 0.75 
             spec_box_y = line1_y - spec_box_h - 2
             
@@ -262,17 +260,16 @@ def create_pdf(selected_data, image_map, items_per_page, drive_service):
     buffer.seek(0)
     return buffer
 
+# ==========================================
 # --- 5. Streamlit UI ---
+# ==========================================
 st.set_page_config(page_title="PB 카탈로그", layout="wide")
 
 if not os.path.exists(JSON_KEY_FILE):
     st.error(f"키 파일을 찾을 수 없습니다: {JSON_KEY_FILE}")
     st.stop()
 
-if not os.path.exists(FONT_PATH) or not os.path.exists(FONT_BOLD_PATH):
-    st.error(f"윈도우 폰트 파일이 누락되었습니다.")
-    st.stop()
-
+# 폰트 파일을 등록합니다.
 pdfmetrics.registerFont(TTFont('KoreanFont', FONT_PATH))
 pdfmetrics.registerFont(TTFont('KoreanFontBold', FONT_BOLD_PATH))
 
@@ -288,7 +285,6 @@ if gc:
         
         with st.sidebar:
             st.header("⚙️ 설정")
-            # [디벨롭 2번] 사이드바 선택지에 12개 옵션 추가
             items_per_page = st.selectbox("페이지당 품목 수", [1, 2, 4, 6, 9, 12], index=4) 
             st.success("연결 완료 (v3.7)")
 
