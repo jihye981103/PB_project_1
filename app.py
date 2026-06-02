@@ -1,26 +1,9 @@
-import os
-import sys
-import subprocess
-
-# --- [치트키] Streamlit 서버 내에 필요한 라이브러리 강제 자동 설치 ---
-def install_packages():
-    required_packages = ["gspread", "google-api-python-client", "reportlab", "pandas"]
-    for package in required_packages:
-        try:
-            __import__(package)
-        except ImportError:
-            # 서버 내부 터미널을 호출해 강제로 설치합니다.
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-# 프로그램 시작하자마자 설치 프로세스 작동
-install_packages()
-
-# 라이브러리 정상 로드
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import pandas as pd
+import os
 import urllib.request
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -34,14 +17,14 @@ BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 JSON_KEY_FILE = os.path.join(BASE_PATH, "key.json")
 LOGO_IMAGE_PATH = os.path.join(BASE_PATH, "logo.png")
 
-# 한글 폰트 자동 다운로드 로직
+# 한글 폰트 자동 다운로드
 FONT_PATH = os.path.join(BASE_PATH, "NanumGothic.ttf")
 if not os.path.exists(FONT_PATH):
     with st.spinner("한글 폰트를 준비 중입니다..."):
         font_url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
         urllib.request.urlretrieve(font_url, FONT_PATH)
 
-# 사용자 고유 ID
+# 사용자 고유 ID (교정 완료)
 SHEET_ID = "1EiaKCUJU905ajNzUwVOq542aVc8CTw8oFbLaeI9xeHI"
 FOLDER_ID = "1INlxagsBpkYmm4rGM2CqB2wtM_oa6EAW"
 
